@@ -4,7 +4,7 @@ Build a small website served by two EC2 instances behind an AWS Application Load
 
 **Time budget:** approximately two hours, assuming Terraform, the AWS CLI, and AWS authentication are already working.
 
-This README describes the lab specification and intended outcomes. The Terraform configuration is still to be implemented.
+This README describes the lab specification and intended outcomes. Follow [INSTRUCTIONS.md](INSTRUCTIONS.md) for the complete build walkthrough. The Terraform configuration is still to be implemented.
 
 ## What we'll achieve
 
@@ -70,7 +70,7 @@ Public IPs support outbound bootstrap traffic; the instance security group still
 
 ## Prerequisites
 
-New to AWS? Start with [AWS setup](aws_setup.md) to configure your account, MFA, budget notifications, local tools, and Terraform login. Allow another 30–60 minutes for this setup before the two-hour lab.
+New to AWS? Start with [AWS setup](AWS_SETUP.md) to configure your account, MFA, budget notifications, local tools, and Terraform login. Allow another 30–60 minutes for this setup before the two-hour lab.
 
 - An AWS account and an authenticated AWS CLI profile with permission to create and remove the lab resources.
 - Terraform and the AWS CLI installed locally.
@@ -91,7 +91,8 @@ Use an AWS CLI profile or your organization's supported authentication method. K
 ```text
 terraform-alb-lab/
 ├── README.md
-├── aws_setup.md     # Beginner AWS account and local tool setup
+├── AWS_SETUP.md     # Beginner AWS account and local tool setup
+├── INSTRUCTIONS.md  # Step-by-step Terraform build and experiments
 ├── main.tf          # Provider and infrastructure resources
 ├── variables.tf     # Region and instance settings
 ├── outputs.tf       # ALB URL
