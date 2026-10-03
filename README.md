@@ -70,6 +70,8 @@ Public IPs support outbound bootstrap traffic; the instance security group still
 
 ## Prerequisites
 
+New to AWS? Start with [AWS setup](aws_setup.md) to configure your account, MFA, budget notifications, local tools, and Terraform login. Allow another 30–60 minutes for this setup before the two-hour lab.
+
 - An AWS account and an authenticated AWS CLI profile with permission to create and remove the lab resources.
 - Terraform and the AWS CLI installed locally.
 - A chosen AWS region and two available Availability Zones.
@@ -89,6 +91,7 @@ Use an AWS CLI profile or your organization's supported authentication method. K
 ```text
 terraform-alb-lab/
 ├── README.md
+├── aws_setup.md     # Beginner AWS account and local tool setup
 ├── main.tf          # Provider and infrastructure resources
 ├── variables.tf     # Region and instance settings
 ├── outputs.tf       # ALB URL
