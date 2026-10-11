@@ -1,3 +1,4 @@
+# Part 3: Create the project files — exclude local Terraform artifacts (INSTRUCTIONS.md)
 .terraform/
 *.tfstate
 *.tfstate.*

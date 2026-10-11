@@ -1,3 +1,4 @@
+# Part 4: Configure Terraform and the AWS provider (INSTRUCTIONS.md)
 terraform {
   required_version = ">= 1.5"
 
@@ -23,6 +24,7 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+# Part 5: Add the network (INSTRUCTIONS.md)
 resource "aws_vpc" "lab" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_support   = true
@@ -66,6 +68,7 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
+# Part 6: Add the security groups (INSTRUCTIONS.md)
 resource "aws_security_group" "alb" {
   name_prefix = "alb-lab-alb-"
   description = "Public HTTP access to the ALB"
@@ -106,4 +109,52 @@ resource "aws_vpc_security_group_egress_rule" "web_outbound" {
   security_group_id = aws_security_group.web.id
   cidr_ipv4         = "0.0.0.0/0"
   ip_protocol       = "-1"
+}
+
+# Part 7: Add the two web servers (INSTRUCTIONS.md)
+data "aws_ssm_parameter" "amazon_linux" {
+  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+}
+
+resource "aws_instance" "web" {
+  count = 2
+
+  ami                         = data.aws_ssm_parameter.amazon_linux.value
+  instance_type               = "t3.micro"
+  subnet_id                   = aws_subnet.public[count.index].id
+  vpc_security_group_ids      = [aws_security_group.web.id]
+  associate_public_ip_address = true
+  user_data_replace_on_change = true
+
+  user_data = <<-EOF
+    #!/bin/bash
+    set -euxo pipefail
+    dnf install -y nginx
+    echo '<h1>Hello from server ${count.index == 0 ? "A" : "B"}</h1>' > /usr/share/nginx/html/index.html
+    systemctl enable --now nginx
+  EOF
+
+  metadata_options {
+    http_tokens = "required"
+  }
+
+  root_block_device {
+    volume_type           = "gp3"
+    volume_size           = 8
+    encrypted             = true
+    delete_on_termination = true
+  }
+
+  credit_specification {
+    cpu_credits = "standard"
+  }
+
+  tags = {
+    Name = "alb-lab-server-${count.index == 0 ? "A" : "B"}"
+  }
+
+  depends_on = [
+    aws_route_table_association.public,
+    aws_vpc_security_group_egress_rule.web_outbound
+  ]
 }

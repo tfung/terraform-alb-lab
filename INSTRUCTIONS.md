@@ -486,6 +486,52 @@ The explicit dependency ensures outbound routing and its firewall rule exist bef
 
 Reference: [AWS public AMI parameters](https://docs.aws.amazon.com/systems-manager/latest/userguide/parameter-store-public-parameters-ami.html).
 
+
+### Architecture after part 7
+
+**Added in step 7:** the AMI data lookup and two EC2 server declarations, highlighted in amber and labeled **NEW**. The subnets, routing, and security group come from parts 5 and 6. This diagram shows the architecture after applying through step 7; writing the configuration alone does not create the servers. The ALB is added in step 8.
+
+```mermaid
+flowchart TB
+    PARAM["AWS public SSM parameter<br/>Existing regional Amazon Linux AMI ID"]
+    AMI["NEW data lookup<br/>data.aws_ssm_parameter.amazon_linux"]
+    START["user_data — first boot<br/>Install Nginx, write index.html,<br/>start service and enable it on reboot"]
+    PARAM -->|"Read parameter value"| AMI
+    subgraph VPC["aws_vpc.lab — 10.0.0.0/16"]
+        subgraph SUB0["aws_subnet.public[0] — 10.0.1.0/24 — Zone A"]
+            A["NEW: aws_instance.web[0]<br/>alb-lab-server-A — t3.micro<br/>Nginx: Hello from server A"]
+        end
+        subgraph SUB1["aws_subnet.public[1] — 10.0.2.0/24 — Zone B"]
+            B["NEW: aws_instance.web[1]<br/>alb-lab-server-B — t3.micro<br/>Nginx: Hello from server B"]
+        end
+        SG["aws_security_group.web<br/>Ingress: ALB group only, TCP 80<br/>Egress: any IPv4 destination, all protocols"]
+        RT["aws_route_table.public<br/>10.0.0.0/16 → local<br/>0.0.0.0/0 → internet gateway"]
+        IGW["aws_internet_gateway.lab"]
+        SG -.->|"vpc_security_group_ids: attached firewall"| A
+        SG -.->|"vpc_security_group_ids: attached firewall"| B
+        SUB0 -->|"aws_route_table_association.public[0]"| RT
+        SUB1 -->|"aws_route_table_association.public[1]"| RT
+        RT -->|"Default IPv4 route"| IGW
+    end
+    AMI -->|"ami = parameter value"| A
+    AMI -->|"ami = parameter value"| B
+    START -.->|"Configure server A"| A
+    START -.->|"Configure server B"| B
+    IGW <-->|"Public IPv4 connectivity"| INTERNET["Public internet / package servers"]
+    classDef added fill:#fff3cd,stroke:#b7791f,stroke-width:3px,color:#332600;
+    class AMI,A,B added;
+```
+
+**Legend:** amber / NEW marks additions in this step. Arrows show lookups, configuration relationships, and network connectivity; neither the data source, user-data script, security group, nor route table is another server that packets pass through.
+
+- **Placement:** instance `[0]` uses subnet `[0]`, and instance `[1]` uses subnet `[1]`, placing the servers in different Availability Zones.
+- **Startup:** Terraform inserts A or B into each script. Nginx is installed at first boot, and its service is enabled for later reboots. A successful apply can finish before installation does.
+- **Package downloads:** the servers' public IPv4 addresses, subnet default route, internet gateway, and `aws_vpc_security_group_egress_rule.web_outbound` allow outbound downloads. Responses are allowed by stateful security-group tracking.
+- **Dependencies:** `depends_on` waits for the route-table associations and web outbound rule before launching the servers, so their startup scripts have an internet path.
+- **Instance settings:** each server has an encrypted 8 GiB gp3 root disk, requires IMDSv2, and uses standard CPU credits. The root disk is deleted when the server is terminated.
+- **HTTP access:** creating servers does not make their pages publicly accessible. The web group's inbound rule accepts TCP 80 only from the ALB group; the ALB endpoint comes in step 8.
+
+
 ## 8. Add the ALB and outputs
 
 | Block kind / type | Local name | Terraform reference | Purpose |
