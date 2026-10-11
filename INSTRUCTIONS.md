@@ -72,9 +72,21 @@ Reference: [AWS browser-login and process-credentials documentation](https://doc
 
 ## 3. Create the project files
 
+If you ran `terraform init` before creating the configuration, you may see:
+
+```text
+Terraform initialized in an empty directory!
+
+The directory has no Terraform configuration files.
+```
+
+This means Terraform is installed and can run, but the current directory has no `.tf` configuration to initialize. It has not downloaded the AWS provider or created AWS resources. Continue below to create and populate the files, then run `terraform init` again in step 4.
+
 ```sh
 touch main.tf variables.tf outputs.tf .gitignore
 ```
+
+`touch` creates empty files; it does not add Terraform configuration. Open them in your editor and save the contents shown below. Add the variable definition to `variables.tf` in this step and the provider configuration to `main.tf` in step 4. Leave `outputs.tf` empty until step 8.
 
 Put this in `.gitignore`:
 
@@ -131,10 +143,14 @@ data "aws_availability_zones" "available" {
 
 The provider is Terraform's adapter for AWS. A data source reads existing AWS information; this one lists available zones. Resource blocks in later steps create infrastructure. References such as `aws_vpc.lab.id` tell Terraform how resources depend on one another.
 
+After saving `variables.tf` and `main.tf`, run these commands from the project directory:
+
 ```sh
 terraform init
 terraform validate
 ```
+
+This time, `init` should download the HashiCorp AWS provider, and validation should report that the configuration is valid. If initialization still reports an empty directory, check that you are in `terraform-alb-lab` and that your files are saved with `.tf` extensions rather than `.tf.txt`.
 
 Initialization downloads the provider; it does not create infrastructure. Keep the generated `.terraform.lock.hcl` in Git to record the selected provider version.
 
