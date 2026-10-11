@@ -385,10 +385,10 @@ flowchart TB
         subgraph NEW["Added in step 6 — firewall configuration"]
             ALBSG["NEW: aws_security_group.alb"]
             WEBSG["NEW: aws_security_group.web"]
-            HTTP["NEW ingress: alb_http<br/>Any IPv4 source → TCP 80"]
-            ALBOUT["NEW egress: alb_to_web<br/>Web group → TCP 80"]
-            WEBIN["NEW ingress: web_from_alb<br/>ALB group → TCP 80"]
-            WEBOUT["NEW egress: web_outbound<br/>Any IPv4 destination, all protocols"]
+            HTTP["NEW ingress<br/>aws_vpc_security_group_ingress_rule.alb_http<br/>Any IPv4 source → TCP 80"]
+            ALBOUT["NEW egress<br/>aws_vpc_security_group_egress_rule.alb_to_web<br/>Web group → TCP 80"]
+            WEBIN["NEW ingress<br/>aws_vpc_security_group_ingress_rule.web_from_alb<br/>ALB group → TCP 80"]
+            WEBOUT["NEW egress<br/>aws_vpc_security_group_egress_rule.web_outbound<br/>Any IPv4 destination, all protocols"]
             HTTP -->|"Rule belongs to"| ALBSG
             ALBOUT -->|"Rule belongs to"| ALBSG
             WEBIN -->|"Rule belongs to"| WEBSG
@@ -411,7 +411,7 @@ flowchart TB
     class ALB,EC0,EC1 later;
 ```
 
-The rule labels use the local names from the resource table above. `alb_http` and `web_from_alb` are `aws_vpc_security_group_ingress_rule` resources; `alb_to_web` and `web_outbound` are `aws_vpc_security_group_egress_rule` resources.
+Each security-group and rule label shows its full Terraform resource address (`resource_type.local_name`), matching the references in the table above and the declarations in `main.tf`.
 
 Solid arrows show configuration relationships, except the gateway's connection to the internet. Dashed arrows show later attachments or application traffic. The browser-to-ALB arrow summarizes the request path through the internet gateway.
 
