@@ -718,7 +718,9 @@ The listener accepts HTTP. The target group identifies destinations; attachments
 | `terraform validate` | Check the configuration's syntax and internal consistency. |
 | `terraform plan` | Preview changes using the configured resources and current AWS state. |
 | `terraform apply` | Create or update the resources declared in steps 5–8. |
+| `terraform output` | Show all saved outputs. |
 | `terraform output -raw alb_url` | Retrieve the endpoint for browser and curl tests. |
+| `terraform output instance_ids` | Show both EC2 instance IDs. |
 
 ```sh
 terraform fmt
@@ -729,8 +731,22 @@ terraform apply
 
 Review what Terraform will create, then enter `yes` when prompted. Deployment and server startup take several minutes. A successful apply does not necessarily mean startup scripts have finished or targets are healthy yet.
 
+### View outputs and test the website
+
+Run these commands from your `terraform-alb-lab` directory. The part 8 outputs become available after a successful `terraform apply`; `terraform output` reads saved values from Terraform state.
+
 ```sh
+# Show all outputs
+terraform output
+
+# Show the ALB website URL
 terraform output -raw alb_url
+
+# Show both EC2 instance IDs
+terraform output instance_ids
+
+# Test the website through the ALB
+curl "$(terraform output -raw alb_url)"
 ```
 
 Open the URL in a browser. Then send independent requests:
