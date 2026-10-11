@@ -210,6 +210,18 @@ resource "aws_route_table_association" "public" {
 - **`count = 2`:** creates two copies, indexed by `0` and `1`.
 - **`cidrsubnet`:** produces `10.0.1.0/24` and `10.0.2.0/24`.
 
+Both subnets use the same route table. Internet-bound IPv4 traffic follows this path:
+
+```mermaid
+flowchart BT
+    S1["Subnet 1: 10.0.1.0/24 — Zone A"] --> RT["Shared route table"]
+    S2["Subnet 2: 10.0.2.0/24 — Zone B"] --> RT
+    RT -->|"Internet destinations: 0.0.0.0/0"| IGW[Internet gateway]
+    IGW --> Internet
+```
+
+Zone A and Zone B represent the two Availability Zones selected by the data source. The route table provides routing rules rather than acting as another server. Instances also need a public IPv4 address and security group rules permitting the traffic to use this internet path.
+
 An ALB needs subnets in at least two Availability Zones. [AWS ALB requirements](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/application-load-balancers.html).
 
 ```sh
