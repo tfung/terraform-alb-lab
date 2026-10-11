@@ -764,6 +764,14 @@ done
 
 If the page fails initially, open **EC2 → Target Groups → alb-lab-web → Targets** and inspect health. Wait for boot and package installation. For persistent failures, check routing, security group rules, and startup output in **EC2 → Instances → Actions → Monitor and troubleshoot → Get system log**. System logs may include cloud-init output; detailed user-data output is stored on the instance in `/var/log/cloud-init-output.log`.
 
+### Reference: both targets healthy
+
+Open **EC2 → Target Groups → alb-lab-web → Targets**. Your screenshot below shows servers A and B registered on port 80 in different Availability Zones, with both reporting **Healthy**. Your instance IDs may differ.
+
+![AWS EC2 target group alb-lab-web showing server A and server B healthy on port 80](docs/images/part-9-healthy-targets.png)
+
+Part 9 is complete when both targets are healthy and the requests above return responses from both servers.
+
 ## 10. Test a failure and recovery
 
 | Existing resource | Test / expected behavior |
