@@ -40,6 +40,12 @@ sequenceDiagram
 
 ## 1. Open the project and select your AWS profile
 
+| Command / setting | Purpose |
+| --- | --- |
+| `AWS_PROFILE=terraform-lab` | Select the existing local login profile; this is not a Terraform resource. |
+| `aws sts get-caller-identity` | Confirm the AWS account and identity used by the terminal. |
+| `terraform version` | Confirm Terraform is installed. |
+
 ```sh
 cd /Users/thomasfung/src/terraform-alb-lab
 export AWS_PROFILE=terraform-lab
@@ -52,6 +58,12 @@ Replace `terraform-lab` if you chose another login profile name. Verify that the
 We use **Ohio (`us-east-2`)** throughout this walkthrough. Select Ohio in the AWS console too.
 
 ## 2. Make your browser login available to Terraform
+
+| Local configuration | Purpose |
+| --- | --- |
+| `terraform-lab` profile | Hold the browser-login configuration used to obtain temporary credentials. |
+| `terraform-provider` profile | Obtain credentials from the login profile using `credential_process`. |
+| `AWS_PROFILE=terraform-provider` | Select the process profile for Terraform; no AWS infrastructure is created in this step. |
 
 Some development tools need a compatibility profile to use credentials from `aws login`. Use AWS's documented `credential_process` bridge:
 
@@ -73,6 +85,13 @@ Set `AWS_PROFILE=terraform-provider` again in each new terminal. If your session
 Reference: [AWS browser-login and process-credentials documentation](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sign-in.html).
 
 ## 3. Create the project files
+
+| File / declaration | Reference | Purpose |
+| --- | --- | --- |
+| `main.tf` | — | Hold the provider, data sources, and infrastructure declarations added in later steps. |
+| `variable "aws_region"` in `variables.tf` | `var.aws_region` | Supply the configurable AWS region, defaulting to Ohio. |
+| `outputs.tf` | — | Hold output declarations added in step 8. |
+| `.gitignore` | — | Keep downloaded providers, state, and saved plans out of Git. |
 
 If you ran `terraform init` before creating the configuration, you may see:
 
@@ -113,6 +132,12 @@ variable "aws_region" {
 ```
 
 ## 4. Configure Terraform and the AWS provider
+
+| Block kind / type | Local name | Terraform reference | Purpose |
+| --- | --- | --- | --- |
+| `terraform` settings | — | — | Require Terraform 1.5 or newer and declare the AWS provider dependency. |
+| `provider "aws"` | Default provider | — | Configure the region and default project tags. |
+| `data "aws_availability_zones"` | `available` | `data.aws_availability_zones.available` | Read the available zones for subnet placement; creates no zones. |
 
 Start `main.tf` with:
 
@@ -157,6 +182,14 @@ This time, `init` should download the HashiCorp AWS provider, and validation sho
 Initialization downloads the provider; it does not create infrastructure. Keep the generated `.terraform.lock.hcl` in Git to record the selected provider version.
 
 ## 5. Add the network
+
+| Resource type | Local name | Terraform reference | Purpose |
+| --- | --- | --- | --- |
+| `aws_vpc` | `lab` | `aws_vpc.lab` | Create the VPC with address range `10.0.0.0/16`. |
+| `aws_subnet` | `public` | `aws_subnet.public[0]`, `aws_subnet.public[1]` | Create two subnets in different Availability Zones. |
+| `aws_internet_gateway` | `lab` | `aws_internet_gateway.lab` | Attach an internet gateway to the VPC. |
+| `aws_route_table` | `public` | `aws_route_table.public` | Define the default IPv4 route to the internet gateway. AWS also supplies a local VPC route. |
+| `aws_route_table_association` | `public` | `aws_route_table_association.public[0]`, `aws_route_table_association.public[1]` | Associate both subnets with the same route table. |
 
 Append to `main.tf`:
 
@@ -266,6 +299,17 @@ Read the proposed network resources. Wait to apply until step 9, when the whole 
 
 ## 6. Add the security groups
 
+| Resource type | Local name | Terraform reference | Purpose |
+| --- | --- | --- | --- |
+| `aws_security_group` | `alb` | `aws_security_group.alb` | Create the firewall group attached to the ALB in step 8. |
+| `aws_security_group` | `web` | `aws_security_group.web` | Create the firewall group shared by the EC2 servers in step 7. |
+| `aws_vpc_security_group_ingress_rule` | `alb_http` | `aws_vpc_security_group_ingress_rule.alb_http` | Allow incoming TCP port 80 to the ALB from any IPv4 source. |
+| `aws_vpc_security_group_egress_rule` | `alb_to_web` | `aws_vpc_security_group_egress_rule.alb_to_web` | Allow the ALB to send requests and health checks to the web group on TCP port 80. |
+| `aws_vpc_security_group_ingress_rule` | `web_from_alb` | `aws_vpc_security_group_ingress_rule.web_from_alb` | Allow incoming TCP port 80 to the servers from the ALB group. |
+| `aws_vpc_security_group_egress_rule` | `web_outbound` | `aws_vpc_security_group_egress_rule.web_outbound` | Allow the servers to initiate outbound traffic using any IP protocol to any IPv4 destination, including package downloads. |
+
+`security_group_id` identifies the group receiving a rule. For ingress, `cidr_ipv4` or `referenced_security_group_id` identifies the allowed source; for egress, it identifies the allowed destination. The two port fields define a destination-port range; `80` to `80` permits one port. `ip_protocol = "-1"` permits all IP protocols and does not need a port range.
+
 Append to `main.tf`:
 
 ```hcl
@@ -314,7 +358,58 @@ resource "aws_vpc_security_group_egress_rule" "web_outbound" {
 
 Security groups are stateful firewall rules. The ALB accepts public HTTP and forwards it to the servers. Servers accept HTTP only from the ALB's security group, and can make outbound requests to download packages. Return traffic is automatically allowed. This lab does not open SSH.
 
+
+### Architecture after parts 5 and 6
+
+At this checkpoint, the configuration defines the network, two security groups, and their rules. The EC2 servers and ALB are added in steps 7 and 8; the diagram marks them as future resources. These declarations are deployed when you apply in step 9.
+
+```mermaid
+flowchart TB
+    INTERNET["Public internet / browser / package servers"]
+    subgraph VPC["aws_vpc.lab — 10.0.0.0/16"]
+        IGW["aws_internet_gateway.lab"]
+        RT["aws_route_table.public<br/>10.0.0.0/16 → local, added by AWS<br/>0.0.0.0/0 → internet gateway"]
+        subgraph AZ0["Availability Zone A"]
+            subgraph SUB0["aws_subnet.public[0] — 10.0.1.0/24"]
+                EC0["Future: aws_instance.web[0]<br/>Step 7 — server A"]
+            end
+        end
+        subgraph AZ1["Availability Zone B"]
+            subgraph SUB1["aws_subnet.public[1] — 10.0.2.0/24"]
+                EC1["Future: aws_instance.web[1]<br/>Step 7 — server B"]
+            end
+        end
+        ALB["Future: aws_lb.lab<br/>Step 8 — spans both subnets"]
+        ALBSG["aws_security_group.alb<br/>Ingress: any IPv4 source → TCP 80<br/>Egress: web group → TCP 80"]
+        WEBSG["aws_security_group.web<br/>Ingress: ALB group → TCP 80<br/>Egress: any IPv4 destination, all protocols"]
+        SUB0 -->|"association public[0]"| RT
+        SUB1 -->|"association public[1]"| RT
+        RT -->|"Default IPv4 route"| IGW
+        ALBSG -.->|"Attach in step 8"| ALB
+        WEBSG -.->|"Attach in step 7"| EC0
+        WEBSG -.->|"Attach in step 7"| EC1
+        ALB -.->|"Forward HTTP / health checks, TCP 80"| EC0
+        ALB -.->|"Forward HTTP / health checks, TCP 80"| EC1
+    end
+    IGW <-->|"VPC internet connection"| INTERNET
+    INTERNET -.->|"Future browser requests: HTTP 80 via gateway"| ALB
+    classDef future stroke-dasharray: 5 5;
+    class ALB,EC0,EC1 future;
+```
+
+Solid subnet arrows represent route-table associations, not packets flowing through the table. Dashed arrows represent future resource attachments or application traffic. The browser-to-ALB arrow summarizes the request path through the internet gateway.
+
+- **Internal path:** ALB requests to the servers' private IPs use the local VPC route. Both `alb_to_web` and `web_from_alb` permit these new connections.
+- **Internet path:** future servers downloading packages use the default route and internet gateway, with public IPv4 addresses and permission from `web_outbound`.
+- **Security groups:** these are attached firewall policies, not separate servers or network hops. The ALB group protects the ALB; the web group protects both EC2 instances.
+- **Return traffic:** security groups are stateful, so replies to permitted connections are automatically allowed.
+
 ## 7. Add the two web servers
+
+| Block kind / type | Local name | Terraform reference | Purpose |
+| --- | --- | --- | --- |
+| `data "aws_ssm_parameter"` | `amazon_linux` | `data.aws_ssm_parameter.amazon_linux` | Read the regional Amazon Linux AMI ID; creates no parameter or AMI. |
+| `resource "aws_instance"` | `web` | `aws_instance.web[0]`, `aws_instance.web[1]` | Create two EC2 servers, attach the web security group, and install Nginx through user data. |
 
 Append to `main.tf`:
 
@@ -376,6 +471,15 @@ The explicit dependency ensures outbound routing and its firewall rule exist bef
 Reference: [AWS public AMI parameters](https://docs.aws.amazon.com/systems-manager/latest/userguide/parameter-store-public-parameters-ami.html).
 
 ## 8. Add the ALB and outputs
+
+| Block kind / type | Local name | Terraform reference | Purpose |
+| --- | --- | --- | --- |
+| `resource "aws_lb"` | `lab` | `aws_lb.lab` | Create the internet-facing ALB across both subnets and attach its security group. |
+| `resource "aws_lb_target_group"` | `web` | `aws_lb_target_group.web` | Define the HTTP destination group and health checks. |
+| `resource "aws_lb_target_group_attachment"` | `web` | `aws_lb_target_group_attachment.web[0]`, `aws_lb_target_group_attachment.web[1]` | Register each EC2 server in the target group. |
+| `resource "aws_lb_listener"` | `http` | `aws_lb_listener.http` | Accept HTTP on port 80 and forward it to the target group. |
+| `output` | `alb_url` | CLI: `terraform output -raw alb_url` | Display the public HTTP URL; creates no AWS resource. |
+| `output` | `instance_ids` | CLI: `terraform output instance_ids` | Display the EC2 IDs for identifying the experiment's servers. |
 
 Append to `main.tf`:
 
@@ -442,6 +546,14 @@ The listener accepts HTTP. The target group identifies destinations; attachments
 
 ## 9. Review and deploy
 
+| Command | Purpose |
+| --- | --- |
+| `terraform fmt` | Format the configuration. |
+| `terraform validate` | Check the configuration's syntax and internal consistency. |
+| `terraform plan` | Preview changes using the configured resources and current AWS state. |
+| `terraform apply` | Create or update the resources declared in steps 5–8. |
+| `terraform output -raw alb_url` | Retrieve the endpoint for browser and curl tests. |
+
 ```sh
 terraform fmt
 terraform validate
@@ -472,6 +584,13 @@ If the page fails initially, open **EC2 → Target Groups → alb-lab-web → Ta
 
 ## 10. Test a failure and recovery
 
+| Existing resource | Test / expected behavior |
+| --- | --- |
+| `aws_instance.web[0]` — server A | Stop it to simulate failure, then start it to test recovery. |
+| `aws_instance.web[1]` — server B | Keep it running so it can continue responding. |
+| `aws_lb_target_group.web` | Observe target health as A stops and starts. |
+| `aws_lb.lab` | Continue serving requests through B after A's failure is detected. |
+
 1. Confirm both registered targets are healthy.
 2. Open **EC2 → Instances** in Ohio.
 3. Select **alb-lab-server-A** and choose **Instance state → Stop instance**.
@@ -492,6 +611,12 @@ curl --connect-timeout 5 http://INSTANCE_PUBLIC_IP
 Replace `INSTANCE_PUBLIC_IP` with a lab instance's address.
 
 ## 11. Remove the lab
+
+| Command | Purpose |
+| --- | --- |
+| `terraform plan -destroy` | Preview removal of the managed lab resources. |
+| `terraform destroy` | Delete the lab resources tracked in state after confirmation. |
+| `terraform state list` | Verify that no managed resources remain in state after successful cleanup. |
 
 ```sh
 terraform plan -destroy
