@@ -361,47 +361,63 @@ Security groups are stateful firewall rules. The ALB accepts public HTTP and for
 
 ### Architecture after parts 5 and 6
 
-At this checkpoint, the configuration defines the network, two security groups, and their rules. The EC2 servers and ALB are added in steps 7 and 8; the diagram marks them as future resources. These declarations are deployed when you apply in step 9.
+**Added in step 6:** two security groups and four rules, highlighted in amber and labeled **NEW** below. The network comes from step 5. Gray dashed boxes are previews of the EC2 servers and ALB introduced in steps 7 and 8; they are not defined yet at this checkpoint. All of this configuration is deployed when you apply in step 9.
+
+**Legend:** amber / NEW = step 6 additions; ordinary boxes = previous network configuration; gray / LATER = later steps. Public internet is external context, not a resource created by Terraform.
 
 ```mermaid
 flowchart TB
     INTERNET["Public internet / browser / package servers"]
-    subgraph VPC["aws_vpc.lab — 10.0.0.0/16"]
+    subgraph VPC["aws_vpc.lab — 10.0.0.0/16 — step 5"]
         IGW["aws_internet_gateway.lab"]
         RT["aws_route_table.public<br/>10.0.0.0/16 → local, added by AWS<br/>0.0.0.0/0 → internet gateway"]
         subgraph AZ0["Availability Zone A"]
             subgraph SUB0["aws_subnet.public[0] — 10.0.1.0/24"]
-                EC0["Future: aws_instance.web[0]<br/>Step 7 — server A"]
+                EC0["LATER — step 7<br/>aws_instance.web[0] — server A"]
             end
         end
         subgraph AZ1["Availability Zone B"]
             subgraph SUB1["aws_subnet.public[1] — 10.0.2.0/24"]
-                EC1["Future: aws_instance.web[1]<br/>Step 7 — server B"]
+                EC1["LATER — step 7<br/>aws_instance.web[1] — server B"]
             end
         end
-        ALB["Future: aws_lb.lab<br/>Step 8 — spans both subnets"]
-        ALBSG["aws_security_group.alb<br/>Ingress: any IPv4 source → TCP 80<br/>Egress: web group → TCP 80"]
-        WEBSG["aws_security_group.web<br/>Ingress: ALB group → TCP 80<br/>Egress: any IPv4 destination, all protocols"]
+        ALB["LATER — step 8<br/>aws_lb.lab — spans both subnets"]
+        subgraph NEW["Added in step 6 — firewall configuration"]
+            ALBSG["NEW: aws_security_group.alb"]
+            WEBSG["NEW: aws_security_group.web"]
+            HTTP["NEW ingress: alb_http<br/>Any IPv4 source → TCP 80"]
+            ALBOUT["NEW egress: alb_to_web<br/>Web group → TCP 80"]
+            WEBIN["NEW ingress: web_from_alb<br/>ALB group → TCP 80"]
+            WEBOUT["NEW egress: web_outbound<br/>Any IPv4 destination, all protocols"]
+            HTTP -->|"Rule belongs to"| ALBSG
+            ALBOUT -->|"Rule belongs to"| ALBSG
+            WEBIN -->|"Rule belongs to"| WEBSG
+            WEBOUT -->|"Rule belongs to"| WEBSG
+        end
         SUB0 -->|"association public[0]"| RT
         SUB1 -->|"association public[1]"| RT
         RT -->|"Default IPv4 route"| IGW
         ALBSG -.->|"Attach in step 8"| ALB
         WEBSG -.->|"Attach in step 7"| EC0
         WEBSG -.->|"Attach in step 7"| EC1
-        ALB -.->|"Forward HTTP / health checks, TCP 80"| EC0
-        ALB -.->|"Forward HTTP / health checks, TCP 80"| EC1
+        ALB -.->|"Later: HTTP / health checks, TCP 80"| EC0
+        ALB -.->|"Later: HTTP / health checks, TCP 80"| EC1
     end
     IGW <-->|"VPC internet connection"| INTERNET
-    INTERNET -.->|"Future browser requests: HTTP 80 via gateway"| ALB
-    classDef future stroke-dasharray: 5 5;
-    class ALB,EC0,EC1 future;
+    INTERNET -.->|"Later: browser HTTP 80 via gateway"| ALB
+    classDef added fill:#fff3cd,stroke:#b7791f,stroke-width:3px,color:#332600;
+    classDef later fill:#f3f4f6,stroke:#6b7280,stroke-dasharray:5 5,color:#374151;
+    class ALBSG,WEBSG,HTTP,ALBOUT,WEBIN,WEBOUT added;
+    class ALB,EC0,EC1 later;
 ```
 
-Solid subnet arrows represent route-table associations, not packets flowing through the table. Dashed arrows represent future resource attachments or application traffic. The browser-to-ALB arrow summarizes the request path through the internet gateway.
+The rule labels use the local names from the resource table above. `alb_http` and `web_from_alb` are `aws_vpc_security_group_ingress_rule` resources; `alb_to_web` and `web_outbound` are `aws_vpc_security_group_egress_rule` resources.
 
-- **Internal path:** ALB requests to the servers' private IPs use the local VPC route. Both `alb_to_web` and `web_from_alb` permit these new connections.
-- **Internet path:** future servers downloading packages use the default route and internet gateway, with public IPv4 addresses and permission from `web_outbound`.
-- **Security groups:** these are attached firewall policies, not separate servers or network hops. The ALB group protects the ALB; the web group protects both EC2 instances.
+Solid arrows show configuration relationships, except the gateway's connection to the internet. Dashed arrows show later attachments or application traffic. The browser-to-ALB arrow summarizes the request path through the internet gateway.
+
+- **Internal path, once servers and ALB are added:** ALB requests to the servers' private IPs use the local VPC route. Both `alb_to_web` and `web_from_alb` permit these new connections.
+- **Internet path, once servers are added:** package downloads use the default route and internet gateway, with public IPv4 addresses and permission from `web_outbound`.
+- **Security groups:** these are firewall policies, not separate servers or network hops. They are defined in step 6 and attached to resources in steps 7 and 8.
 - **Return traffic:** security groups are stateful, so replies to permitted connections are automatically allowed.
 
 ## 7. Add the two web servers
