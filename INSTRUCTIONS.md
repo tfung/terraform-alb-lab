@@ -588,6 +588,56 @@ Replace `SERVER_PUBLIC_IP` with the current instance address. A timeout is expec
 
 ## 8. Add the ALB and outputs
 
+### Architecture after part 8
+
+Orange highlights the resources added in this part. Solid arrows show HTTP traffic; dotted arrows show configuration relationships. This architecture becomes live after `terraform apply`.
+
+```mermaid
+flowchart TB
+    Browser["Browser / curl"]
+    subgraph VPC["Existing VPC: aws_vpc.lab — 10.0.0.0/16"]
+        subgraph ALB["NEW: Application Load Balancer — aws_lb.lab (across both public subnets)"]
+            Listener["NEW: aws_lb_listener.http<br/>Accept HTTP on port 80"]
+        end
+        TG["NEW: aws_lb_target_group.web<br/>HTTP port 80; health checks GET / → 200"]
+        AttachA["NEW: aws_lb_target_group_attachment.web[0]"]
+        AttachB["NEW: aws_lb_target_group_attachment.web[1]"]
+        subgraph S1["aws_subnet.public[0] — 10.0.1.0/24 — Zone A"]
+            A["Existing: aws_instance.web[0]<br/>Server A — nginx port 80"]
+        end
+        subgraph S2["aws_subnet.public[1] — 10.0.2.0/24 — Zone B"]
+            B["Existing: aws_instance.web[1]<br/>Server B — nginx port 80"]
+        end
+        AlbSG["Existing: aws_security_group.alb<br/>Inbound HTTP from internet<br/>Outbound HTTP to web security group"]
+        WebSG["Existing: aws_security_group.web<br/>Inbound HTTP only from ALB security group"]
+        RT["Existing: aws_route_table.public<br/>10.0.0.0/16 → local<br/>0.0.0.0/0 → internet gateway"]
+        IGW["Existing: aws_internet_gateway.lab"]
+    end
+    Browser -->|"HTTP port 80"| Listener
+    Listener -->|"Forward"| TG
+    TG --> A
+    TG --> B
+    AttachA -. "Registers server A" .-> A
+    AttachB -. "Registers server B" .-> B
+    AttachA -. "Member of" .-> TG
+    AttachB -. "Member of" .-> TG
+    AlbSG -. "Protects ALB" .-> Listener
+    WebSG -. "Protects server" .-> A
+    WebSG -. "Protects server" .-> B
+    S1 -. "Route table association [0]" .-> RT
+    S2 -. "Route table association [1]" .-> RT
+    RT -. "Default route target" .-> IGW
+    URL["NEW output: alb_url<br/>http://ALB-DNS-name"] -. "Uses ALB DNS name" .-> Listener
+    IDs["NEW output: instance_ids"] -. "Collects instance IDs" .-> A
+    IDs -. "Collects instance IDs" .-> B
+    classDef added fill:#fff3cd,stroke:#d97706,stroke-width:2px,color:#111;
+    class Listener,TG,AttachA,AttachB,URL,IDs added;
+    style ALB fill:#fff3cd,stroke:#d97706,stroke-width:2px
+```
+
+The listener belongs to the ALB. The target group and attachments configure which servers it can send requests to; they are not additional servers or network hops. Health checks use the same allowed ALB-to-server connection. The route table and internet gateway provide the public subnets' internet route, while security groups control which connections are allowed. Outputs display values and create no AWS resources.
+
+
 | Block kind / type | Local name | Terraform reference | Purpose |
 | --- | --- | --- | --- |
 | `resource "aws_lb"` | `lab` | `aws_lb.lab` | Create the internet-facing ALB across both subnets and attach its security group. |
