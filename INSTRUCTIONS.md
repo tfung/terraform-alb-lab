@@ -532,6 +532,60 @@ flowchart TB
 - **HTTP access:** creating servers does not make their pages publicly accessible. The web group's inbound rule accepts TCP 80 only from the ALB group; the ALB endpoint comes in step 8.
 
 
+### Part 7 traffic test: outbound works, direct HTTP is blocked
+
+After applying part 7, the servers exist and have public IPv4 addresses. The same routing and firewall rules apply to both servers. This diagram separates an allowed outbound connection from a blocked incoming connection.
+
+```mermaid
+flowchart TB
+    subgraph DIRECT["Direct HTTP test — blocked"]
+        PC["Your computer<br/>curl http://SERVER_PUBLIC_IP"]
+        INPATH["Internet path via<br/>aws_internet_gateway.lab"]
+        CHECK["aws_vpc_security_group_ingress_rule.web_from_alb<br/>Allows TCP 80 only from aws_security_group.alb"]
+        DROP["BLOCKED: your computer is not an ALB source<br/>No connection reaches the web server<br/>curl eventually times out"]
+        PC -->|"New incoming TCP connection to port 80"| INPATH
+        INPATH -->|"Evaluate the server's inbound policy"| CHECK
+        CHECK -->|"No matching allow rule"| DROP
+    end
+    subgraph DOWNLOAD["Server package download — allowed"]
+        A["aws_instance.web[0]<br/>Server A — public IPv4 assigned"]
+        B["aws_instance.web[1]<br/>Server B — public IPv4 assigned"]
+        OUT["aws_vpc_security_group_egress_rule.web_outbound<br/>Permits all IP protocols to any IPv4 destination"]
+        ROUTE["aws_route_table.public<br/>0.0.0.0/0 → aws_internet_gateway.lab"]
+        PKG["Public package server<br/>Download Nginx"]
+        REPLY["Responses allowed by stateful connection tracking<br/>Return through the gateway to the requesting server"]
+        A -->|"Initiate package download"| OUT
+        B -->|"Initiate package download"| OUT
+        OUT -->|"Use the subnet's internet route and public IP"| ROUTE
+        ROUTE -->|"Via aws_internet_gateway.lab"| PKG
+        PKG --> REPLY
+    end
+    classDef blocked fill:#fee2e2,stroke:#b91c1c,stroke-width:3px,color:#450a0a;
+    classDef allowed fill:#dcfce7,stroke:#15803d,color:#14532d;
+    classDef added fill:#fff3cd,stroke:#b7791f,stroke-width:3px,color:#332600;
+    class DROP blocked;
+    class OUT,REPLY allowed;
+    class A,B added;
+```
+
+The rule and route boxes represent policy decisions, not separate network appliances. A public IP and internet route provide reachability; security groups decide which connections are permitted. Outbound package-download responses do not require an inbound rule allowing package servers.
+
+Find each public IP with:
+
+```sh
+terraform state show 'aws_instance.web[0]'
+terraform state show 'aws_instance.web[1]'
+```
+
+Look for `public_ip`, then try:
+
+```sh
+curl --connect-timeout 5 http://SERVER_PUBLIC_IP
+```
+
+Replace `SERVER_PUBLIC_IP` with the current instance address. A timeout is expected with the lab's inbound rules, but does not prove Nginx installed successfully. In step 8, the ALB connects to the servers' private IPs as an allowed source; its target health checks verify HTTP readiness. Test the pages through the ALB URL after deploying it. Instance public IPs may change after stopping and starting a server, so read them again before testing.
+
+
 ## 8. Add the ALB and outputs
 
 | Block kind / type | Local name | Terraform reference | Purpose |
