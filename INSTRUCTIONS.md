@@ -792,13 +792,33 @@ Part 9 is complete when both targets are healthy and the requests above return r
 
 This demonstrates traffic recovery, not automatic server replacement. Keep one target healthy: if all targets are unhealthy, an ALB can fail open and route to unhealthy targets. [AWS health-check behavior](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html).
 
-Optionally, try HTTP directly against an instance's public IP with a short timeout. It should fail because its security group accepts HTTP only from the ALB:
+### Optional: test direct access to a server
+
+Find the public IP of a **running** lab instance in the AWS console:
+
+1. Open **EC2 → Instances** in Ohio.
+2. Select **alb-lab-server-A** or **alb-lab-server-B**.
+3. In **Details**, copy **Public IPv4 address**.
+
+You can also inspect the instance values saved in Terraform state:
+
+```sh
+# Server A
+terraform state show 'aws_instance.web[0]'
+
+# Server B
+terraform state show 'aws_instance.web[1]'
+```
+
+Look for the `public_ip` field. A public IP can change after stopping and starting an instance; use the console for its current address if you have just restarted it.
+
+Replace `INSTANCE_PUBLIC_IP` below with the copied address:
 
 ```sh
 curl --connect-timeout 5 http://INSTANCE_PUBLIC_IP
 ```
 
-Replace `INSTANCE_PUBLIC_IP` with a lab instance's address.
+A connection timeout is expected because the web security group accepts HTTP only from the ALB. The ALB URL should still work while it has a healthy target. A direct-access timeout alone does not prove nginx is running; use the ALB request and target health to verify that.
 
 ## 11. Remove the lab
 
