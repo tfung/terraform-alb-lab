@@ -4,6 +4,8 @@ Build one public endpoint backed by two web servers, then stop one server and ob
 
 Allow approximately two hours after completing [AWS setup](AWS_SETUP.md). See [README.md](README.md) for the specifications and learning outcomes.
 
+Track your completed steps in the [README lab progress checklist](README.md#lab-progress).
+
 This is a walkthrough: copy the examples into the indicated files as you work. The Terraform files are not created by this document. Commands run in your local terminal; Terraform creates the infrastructure through AWS APIs.
 
 The lab creates billable resources. Complete the cleanup step when finished.
@@ -221,6 +223,36 @@ flowchart BT
 ```
 
 Zone A and Zone B represent the two Availability Zones selected by the data source. The route table provides routing rules rather than acting as another server. Instances also need a public IPv4 address and security group rules permitting the traffic to use this internet path.
+
+### Map the network to Terraform resources
+
+This diagram uses the resource addresses from `main.tf`. The arrows show configuration relationships, rather than packets passing through each box.
+
+```mermaid
+flowchart TB
+    subgraph VPC["aws_vpc.lab — cidr_block = 10.0.0.0/16"]
+        S0["aws_subnet.public[0]<br/>cidr_block = 10.0.1.0/24"]
+        S1["aws_subnet.public[1]<br/>cidr_block = 10.0.2.0/24"]
+        A0["aws_route_table_association.public[0]"]
+        A1["aws_route_table_association.public[1]"]
+        RT["aws_route_table.public"]
+        LOCAL["10.0.0.0/16 → local<br/>Automatically added by AWS"]
+        IGW["aws_internet_gateway.lab"]
+        S0 -->|"subnet_id"| A0
+        S1 -->|"subnet_id"| A1
+        A0 -->|"route_table_id"| RT
+        A1 -->|"route_table_id"| RT
+        RT -.->|"AWS local route"| LOCAL
+        RT -->|"route: cidr_block = 0.0.0.0/0<br/>gateway_id = aws_internet_gateway.lab.id"| IGW
+    end
+    IGW --> INTERNET["Public internet<br/>No Terraform resource to declare"]
+```
+
+- `count = 2` creates indexes `[0]` and `[1]` for the subnets and associations.
+- Each association's `subnet_id` selects one subnet; both `route_table_id` values reference `aws_route_table.public.id`. That is what makes the table shared.
+- The route's `cidr_block` specifies a destination range; `gateway_id` specifies where matching traffic goes. The more specific local `/16` route wins for VPC destinations, while `/0` is the fallback.
+- `aws_internet_gateway.lab` attaches to this VPC through `vpc_id = aws_vpc.lab.id`. AWS supplies its connection to the public internet.
+- The local route is created by AWS; there is no separate local-route resource in this configuration.
 
 An ALB needs subnets in at least two Availability Zones. [AWS ALB requirements](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/application-load-balancers.html).
 

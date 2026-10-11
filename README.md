@@ -4,7 +4,28 @@ Build a small website served by two EC2 instances behind an AWS Application Load
 
 **Time budget:** approximately two hours, assuming Terraform, the AWS CLI, and AWS authentication are already working.
 
-This README describes the lab specification and intended outcomes. Follow [INSTRUCTIONS.md](INSTRUCTIONS.md) for the complete build walkthrough. The Terraform configuration is still to be implemented.
+This README describes the lab specification and intended outcomes. Follow [INSTRUCTIONS.md](INSTRUCTIONS.md) for the complete build walkthrough. The Terraform configuration is being built incrementally as you work through the lab.
+
+## Lab progress
+
+**Current checkpoint:** step 5, **Add the network**, is complete as reported on October 11, 2026.
+
+**Next:** [step 6 — Add the security groups](INSTRUCTIONS.md#6-add-the-security-groups).
+
+- [x] AWS account and local access setup
+- [x] 1. Open the project and select your AWS profile
+- [x] 2. Make your browser login available to Terraform
+- [x] 3. Create the project files
+- [x] 4. Configure Terraform and the AWS provider
+- [x] 5. Add the network
+- [ ] 6. Add the security groups
+- [ ] 7. Add the two web servers
+- [ ] 8. Add the ALB and outputs
+- [ ] 9. Review and deploy
+- [ ] 10. Test a failure and recovery
+- [ ] 11. Remove the lab
+
+These checkboxes track completed walkthrough steps, not elapsed time. Network configuration is written; deployment and verification in AWS happen in step 9. Update this checklist and the current checkpoint as you finish each step.
 
 ## What we'll achieve
 
